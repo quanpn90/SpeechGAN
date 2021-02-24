@@ -1,0 +1,4 @@
+# ninja log v5
+0	18161	1602255292051099402	/project/wmt2012/project/quan/lib/NMTGMinor/onmt/modules/dynamic_conv/build/temp.linux-x86_64-3.7/dynamic_conv_cuda.o	f81b99630b1fece7
+125	20465	1602255448518373880	/project/wmt2012/project/quan/lib/NMTGMinor/onmt/modules/dynamic_conv/build/temp.linux-x86_64-3.7/dynamic_conv_cuda.o	8dced696140bebe
+126	164687	1602255592714019059	/project/wmt2012/project/quan/lib/NMTGMinor/onmt/modules/dynamic_conv/build/temp.linux-x86_64-3.7/dynamic_conv_cuda_kernel.o	23058773e3aa49f2

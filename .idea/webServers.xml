@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ab582a80-90c6-4d46-95f1-f562d6fd138e" name="rg3hpc1" url="http://rg3hpc1.ira.uka.de">
+        <fileTransfer host="rg3hpc1.ira.uka.de" port="21">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="f4fd2134-fd9a-4771-872f-05b2c8a38ec3" name="rg3hpc1.ira.uka.de">
+        <fileTransfer accessType="SFTP" host="rg3hpc1.ira.uka.de" port="22" sshConfigId="7db59f70-570e-4a0d-89d3-3a3849cfeeef" sshConfig="pquan@rg3hpc1.ira.uka.de:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
