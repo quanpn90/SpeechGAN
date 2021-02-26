@@ -15,6 +15,7 @@ from onmt.modules.optimized.encdec_attention import EncdecMultiheadAttn
 from onmt.modules.dropout import embedded_dropout
 from onmt.models.speech_recognizer.relative_transformer_layers import LIDFeedForward_small
 
+
 class SpeechLSTMEncoder(nn.Module):
     def __init__(self, opt, embedding, encoder_type='audio'):
         super(SpeechLSTMEncoder, self).__init__()
@@ -54,7 +55,8 @@ class SpeechLSTMEncoder(nn.Module):
         self.lid_network = None
 
         if opt.gumbel_embedding or opt.lid_loss or opt.bottleneck:
-            self.lid_network = LIDFeedForward_small(opt.model_size, opt.model_size, opt.n_languages, dropout=opt.dropout)
+            self.lid_network = LIDFeedForward_small(opt.model_size, opt.model_size, opt.n_languages,
+                                                    dropout=opt.dropout)
             self.n_languages = opt.n_languages
 
         if opt.upsampling:
@@ -96,7 +98,6 @@ class SpeechLSTMEncoder(nn.Module):
         self.preprocess_layer = PrePostProcessing(self.model_size, self.emb_dropout, sequence='d',
                                                   variational=self.varitional_dropout)
         self.postprocess_layer = PrePostProcessing(self.model_size, 0, sequence='n')
-
 
     def rnn_fwd(self, seq, mask, hid):
         if mask is not None:
@@ -156,14 +157,12 @@ class SpeechLSTMEncoder(nn.Module):
             hidden_size = seq.size(2) // 2
             seq = seq[:, :, :hidden_size] + seq[:, :, hidden_size:]
 
-
         seq = self.postprocess_layer(seq)
 
-
-
-        output_dict = {'context': seq.transpose(0, 1), 'src_mask': mask_src }
+        output_dict = {'context': seq.transpose(0, 1), 'src_mask': mask_src}
 
         return output_dict
+
 
 class TacotronDecoder(nn.Module):
     def __init__(self, opt):
@@ -265,7 +264,7 @@ class TacotronDecoder(nn.Module):
         decoder_inputs = decoder_inputs.transpose(1, 2)
         decoder_inputs = decoder_inputs.contiguous().view(
             decoder_inputs.size(0),
-            int(decoder_inputs.size(1)/self.n_frames_per_step), -1)
+            int(decoder_inputs.size(1) / self.n_frames_per_step), -1)
         # (B, T_out, n_mel_channels) -> (T_out, B, n_mel_channels)
         decoder_inputs = decoder_inputs.transpose(0, 1)
         return decoder_inputs
@@ -372,7 +371,7 @@ class TacotronDecoder(nn.Module):
         mel_outputs, gate_outputs, alignments = [], [], []
         while len(mel_outputs) < decoder_inputs.size(0) - 1:
             decoder_input = decoder_inputs[len(mel_outputs)]
-           # B, prenet_dim
+            # B, prenet_dim
             mel_output, gate_output, attention_weights = self.decode(
                 decoder_input)
             mel_outputs += [mel_output.squeeze(1)]
@@ -384,7 +383,7 @@ class TacotronDecoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def inference(self,  encoder_out):
+    def inference(self, encoder_out):
         """ Decoder inference
         PARAMS
         ------
@@ -422,8 +421,9 @@ class TacotronDecoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
+
 class Speech2Speech(nn.Module):
-    def __init__(self, encoder,decoder, opt):
+    def __init__(self, encoder, decoder, opt):
         super(Speech2Speech, self).__init__()
         self.mask_padding = True
         self.fp16_run = opt.fp16
@@ -461,32 +461,29 @@ class Speech2Speech(nn.Module):
 
             outputs[2].data.masked_fill_(mask[:, 0, slice], 1e3)
 
-
         return outputs
 
     def forward(self, batch):
-
         src = batch.get('source')
         src_org = batch.get('source_org')
         src_lengths = batch.get('src_lengths')
         src_lengths_org = batch.get('src_lengths_org')
-        src = src.transpose(0, 1) # transpose to have batch first
-
+        src = src.transpose(0, 1)  # transpose to have batch first
 
         encoder_output = self.encoder(src)
         encoder_output = defaultdict(lambda: None, encoder_output)
         context = encoder_output['context']
         src_mask = encoder_output['src_mask']
-        context = context.transpose(0,1)
+        context = context.transpose(0, 1)
         # text_inputs, text_lengths, mels, max_len, output_lengths = inputs
         # text_lengths, output_lengths = text_lengths.data, output_lengths.data
         #
         # embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
         #
         # encoder_outputs = self.encoder(embedded_inputs, text_lengths)
-        decoder_input =  src_org.narrow(2, 1, src_org.size(2) - 1)
-        decoder_input = decoder_input.permute(1,2,0)
-        mel_outputs, gate_outputs, alignments  = self.tacotron_decoder(
+        decoder_input = src_org.narrow(2, 1, src_org.size(2) - 1)
+        decoder_input = decoder_input.permute(1, 2, 0)
+        mel_outputs, gate_outputs, alignments = self.tacotron_decoder(
             src_mask, context, decoder_input)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
@@ -497,7 +494,6 @@ class Speech2Speech(nn.Module):
             src_lengths_org)
 
     def inference(self, input):
-
         encoder_output = self.encoder(input)
         context = encoder_output['context']
         context = context.transpose(0, 1)

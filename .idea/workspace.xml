@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="987134ca-6849-415e-aa37-1ecf1fe2eb2e" name="Default Changelist" comment="" />
+    <list default="true" id="987134ca-6849-415e-aa37-1ecf1fe2eb2e" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/model_factory.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/model_factory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/base_s2s.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/base_s2s.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/speechae.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/speechae.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/tacotron_layers.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/models/speech_metamorphosis/tacotron_layers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/modules/loss.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/modules/loss.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/train_utils/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/train_utils/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/onmt/train_utils/trainer.py" beforeDir="false" afterPath="$PROJECT_DIR$/onmt/train_utils/trainer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/preprocess.py" beforeDir="false" afterPath="$PROJECT_DIR$/preprocess.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/preprocess_multi_dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/preprocess_multi_dataset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/train.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -17,10 +29,35 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+  </component>
+  <component name="RunManager">
+    <configuration name="Unnamed" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="SpeechGAN" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\Anaconda3\python.exe" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -32,7 +69,8 @@
       <updated>1613656480004</updated>
       <workItem from="1613656481420" duration="52874000" />
       <workItem from="1614078544199" duration="3096000" />
-      <workItem from="1614163021238" duration="2615000" />
+      <workItem from="1614163021238" duration="2867000" />
+      <workItem from="1614179196536" duration="41669000" />
     </task>
     <servers />
   </component>

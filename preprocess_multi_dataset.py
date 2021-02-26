@@ -42,14 +42,15 @@ parser.add_argument('-data_type', default="int64",
                     help="Input type for storing text (int64|int32|int|int16) to reduce memory load")
 parser.add_argument('-format', default="raw",
                     help="Save data format: binary or raw. Binary should be used to load faster")
-
+parser.add_argument('-bases2s', action='store_true',
+                    help="prepare data for speech autoencoder")
 parser.add_argument('-train_src', required=True,
                     help="Path to the training source data")
-parser.add_argument('-train_tgt', required=True,
+parser.add_argument('-train_tgt', required=False,
                     help="Path to the training target data")
 parser.add_argument('-valid_src', required=True,
                     help="Path to the validation source data")
-parser.add_argument('-valid_tgt', required=True,
+parser.add_argument('-valid_tgt', required=False,
                     help="Path to the validation target data")
 
 parser.add_argument('-train_src_lang', default="src",
@@ -225,6 +226,21 @@ def make_lm_data(tgt_file, tgt_dicts, max_tgt_length=1000, input_type='word', da
     return tensor
 
 
+def make_bases2s_data(src_file, stride=1, concat=1, prev_context=0, fp16=False, num_workers=1, asr_format="h5",
+                      output_format="raw"):
+    print('[INFO] Processing %s  ...' % src_file)
+
+    binarized_src = SpeechBinarizer.binarize_file(src_file, input_format=asr_format,
+                                                  output_format=output_format, concat=concat,
+                                                  stride=stride, fp16=fp16, prev_context=prev_context,
+                                                  num_workers=num_workers)
+
+    src = binarized_src['data']
+
+    src_sizes = binarized_src['sizes']
+    return src, src_sizes
+
+
 def make_translation_data(src_file, tgt_file, src_dicts, tgt_dicts, tokenizer, max_src_length=64, max_tgt_length=64,
                           add_bos=True, data_type='int64', num_workers=1, verbose=False):
     src, tgt = [], []
@@ -330,7 +346,7 @@ def save_dataset(path, data, format, dicts, src_type):
         print('Saving target data to memory indexed data files. Source data is stored only as scp path.')
         from onmt.data.mmap_indexed_dataset import MMapIndexedDatasetBuilder
 
-        assert opt.asr, "ASR data format is required for this memory indexed format"
+        assert opt.asr or opt.bases2s, "ASR data format is required for this memory indexed format"
 
         # TODO: changing this to before saving everything
         # torch.save(dicts, opt.save_data + '.dict.pt')
@@ -452,11 +468,15 @@ def main():
     start = time.time()
 
     src_train_files = opt.train_src.split("|")
-    tgt_train_files = opt.train_tgt.split("|")
+    if not opt.bases2s:
+        tgt_train_files = opt.train_tgt.split("|")
+    # tgt_train_files = opt.train_tgt.split("|")
     # for ASR and LM we only need to build vocab for the 'target' language
 
     # TODO: adding new words to the existing dictionary in case loading from previously created dict
-    if opt.asr or opt.lm:
+    if opt.bases2s:
+        print("Do not create dictionary")
+    elif opt.asr or opt.lm:
         dicts['tgt'] = init_vocab('target', tgt_train_files, opt.tgt_vocab,
                                   opt.tgt_vocab_size, tokenizer, num_workers=opt.num_threads)
     elif opt.join_vocab:
@@ -478,6 +498,78 @@ def main():
 
     if opt.lm:
         raise NotImplementedError
+
+    elif opt.bases2s:
+        print('Preparing training speech autoencoder ...')
+        src_input_files = opt.train_src.split("|")
+        src_langs = opt.train_src_lang.split("|")
+        # train = dict()
+        idx = opt.starting_train_idx
+
+        for (src_file, src_lang) in zip(src_input_files, src_langs):
+            # First, read and convert data to tensor format
+
+            src_data, src_sizes = make_bases2s_data(src_file, stride=opt.stride, concat=opt.concat,
+                                                    prev_context=opt.previous_context, num_workers=opt.num_threads,
+                                                    fp16=opt.fp16, asr_format=opt.asr_format, output_format=opt.format)
+
+            src_lang_data = [torch.Tensor([dicts['langs'][src_lang]])]
+
+            data = dict()
+
+            data['src'] = src_data
+
+            data['src_sizes'] = src_sizes
+            data['src_lang'] = src_lang_data
+            data['tgt_sizes'] = None
+            data['tgt'] = None
+            data['tgt_lang'] = None
+
+            print("Saving training set %i %s-%s to disk ..." % (idx, src_lang, src_lang))
+
+            # take basedir from opt.save_data
+            path = os.path.join(dirname(opt.save_data), "train.%i.%s-%s" % (idx, src_lang, src_lang))
+            os.makedirs(path, exist_ok=True)
+
+            # save data immediately
+            save_dataset(path, data, opt.format, dicts, opt.src_type)
+            idx = idx + 1
+
+        src_input_files = opt.valid_src.split("|")
+
+        src_langs = opt.valid_src_lang.split("|")
+        n_input_files = len(src_input_files)
+
+        idx = opt.starting_valid_idx
+
+        for (src_file, src_lang) in zip(src_input_files, src_langs):
+            # First, read and convert data to tensor format
+
+            src_data, src_sizes = make_bases2s_data(src_file, stride=opt.stride, concat=opt.concat,
+                                                    prev_context=opt.previous_context, num_workers=opt.num_threads,
+                                                    fp16=opt.fp16, asr_format=opt.asr_format, output_format=opt.format)
+
+            src_lang_data = [torch.Tensor([dicts['langs'][src_lang]])]
+
+            data = dict()
+
+            data['src'] = src_data
+
+            data['src_sizes'] = src_sizes
+            data['src_lang'] = src_lang_data
+            data['tgt_sizes'] = None
+            data['tgt'] = None
+            data['tgt_lang'] = None
+
+            print("Saving validation set %i %s-%s to disk ..." % (idx, src_lang, src_lang))
+
+            # take basedir from opt.save_data
+            path = os.path.join(dirname(opt.save_data), "valid.%i.%s-%s" % (idx, src_lang, src_lang))
+            os.makedirs(path, exist_ok=True)
+
+            # save data immediately
+            save_dataset(path, data, opt.format, dicts, opt.src_type)
+            idx = idx + 1
 
     elif opt.asr:
         print('Preparing training acoustic model ...')
@@ -707,9 +799,9 @@ def main():
     print("Saving dictionary to %s" % (opt.save_data + '.dict.pt'))
     torch.save(dicts, opt.save_data + '.dict.pt')
 
-    if opt.src_vocab is None and opt.asr == False and opt.lm == False:
+    if opt.src_vocab is None and opt.asr == False and opt.lm == False and not opt.bases2s:
         save_vocabulary('source', dicts['src'], opt.save_data + '.src.dict')
-    if opt.tgt_vocab is None:
+    if opt.tgt_vocab is None and not opt.bases2s:
         save_vocabulary('target', dicts['tgt'], opt.save_data + '.tgt.dict')
 
     print("Finished.")

@@ -15,7 +15,6 @@ import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
 parser = argparse.ArgumentParser(description='preprocess.py')
 onmt.markdown.add_md_help_argument(parser)
 
@@ -258,7 +257,8 @@ def make_translation_data(src_file, tgt_file, src_dicts, tgt_dicts, tokenizer, m
     return src, tgt, src_sizes, tgt_sizes
 
 
-def make_bases2s_data(src_file, stride=1, concat=1, prev_context=0, fp16=False, num_workers=1, asr_format="h5", output_format="raw"):
+def make_bases2s_data(src_file, stride=1, concat=1, prev_context=0, fp16=False, num_workers=1, asr_format="h5",
+                      output_format="raw"):
     print('[INFO] Processing %s  ...' % src_file)
 
     binarized_src = SpeechBinarizer.binarize_file(src_file, input_format=asr_format,
@@ -270,6 +270,7 @@ def make_bases2s_data(src_file, stride=1, concat=1, prev_context=0, fp16=False, 
 
     src_sizes = binarized_src['sizes']
     return src, src_sizes
+
 
 def make_asr_data(src_file, tgt_file, tgt_dicts, tokenizer,
                   max_src_length=64, max_tgt_length=64, add_bos=True, data_type='int64', num_workers=1, verbose=False,
@@ -338,7 +339,7 @@ def main():
     start = time.time()
 
     src_train_files = opt.train_src.split("|")
-    if opt.bases2s == False:
+    if not opt.bases2s:
         tgt_train_files = opt.train_tgt.split("|")
     # for ASR and LM we only need to build vocab for the 'target' language
     if opt.bases2s:
@@ -386,13 +387,12 @@ def main():
         train['src_sizes'] = list()
         train['src_lang'] = list()
 
-
         n_input_files = len(src_input_files)
 
         for (src_file, src_lang) in zip(src_input_files, src_langs):
             src_data, src_sizes = make_bases2s_data(src_file, stride=opt.stride, concat=opt.concat,
                                                     prev_context=opt.previous_context, num_workers=opt.num_threads,
-                                                    fp16=opt.fp16,asr_format=opt.asr_format,output_format=opt.format)
+                                                    fp16=opt.fp16, asr_format=opt.asr_format, output_format=opt.format)
 
             n_samples = len(src_data)
 
@@ -405,7 +405,7 @@ def main():
             else:
                 # each sample will have a different language id
                 src_lang_data = [torch.Tensor([dicts['langs'][src_lang]]) for _ in range(n_samples)]
-            
+
             train['src'] += src_data
             train['src_sizes'] += src_sizes
             train['src_lang'] += src_lang_data
@@ -424,11 +424,10 @@ def main():
         valid['src_sizes'] = list()
         valid['src_lang'] = list()
 
-
         for (src_file, src_lang) in zip(src_input_files, src_langs):
             src_data, src_sizes = make_bases2s_data(src_file, stride=opt.stride, concat=opt.concat,
                                                     prev_context=opt.previous_context, num_workers=opt.num_threads,
-                                                    fp16=opt.fp16,asr_format=opt.asr_format, output_format=opt.format )
+                                                    fp16=opt.fp16, asr_format=opt.asr_format, output_format=opt.format)
 
             n_samples = len(src_data)
             if n_input_files == 1:
@@ -535,7 +534,7 @@ def main():
             n_samples = len(src_data)
             if n_input_files == 1:
                 # For single-file cases we only need to have 1 language per file
-                # which will be broadcasted
+                # which will be broadcast
                 src_lang_data = [torch.Tensor([dicts['langs'][src_lang]])]
                 tgt_lang_data = [torch.Tensor([dicts['langs'][tgt_lang]])]
             else:

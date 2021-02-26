@@ -22,17 +22,21 @@ class AttributeLoss(_Loss):
                 targets = 1 - targets
 
             else:
-
                 shift = torch.LongTensor(targets.size()).random_(n_cat - 1) + 1
                 targets = (targets + shift.to(targets.device)) % n_cat
 
-        gtruth = targets.unsqueeze(1).expand(-1, logits.size(0)).contiguous().view(-1)  # B*T
-        logits = logits.transpose(0, 1).contiguous().view(-1, n_cat)  # B*T x V
+        if targets.size(0) > 1:
+            gtruth = targets.unsqueeze(1).expand(-1, logits.size(0)).contiguous().view(-1)  # B*T
+            logits = logits.transpose(0, 1).contiguous().view(-1, n_cat)  # B*T x V
+        else:
+            logits = logits.transpose(0, 1).contiguous().view(-1, n_cat)
+            gtruth = targets.unsqueeze(1).expand(-1, logits.size(0)).contiguous().view(-1)
 
         lprobs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
         non_pad_mask = mask.contiguous().view(-1)
+        # print(lprobs.size(), gtruth.size())
         nll_loss = -lprobs.gather(1, gtruth.unsqueeze(1))[non_pad_mask]
-        nll_loss = nll_loss.mean()
+        nll_loss = nll_loss.sum()
         loss = nll_loss
 
         return loss
@@ -41,6 +45,8 @@ class AttributeLoss(_Loss):
 class Tacotron2Loss(_Loss):
     def __init__(self):
         super(Tacotron2Loss, self).__init__()
+        self.mse = nn.MSELoss(reduction='sum')
+        self.bce = nn.BCEWithLogitsLoss(reduction='sum')
 
     def forward(self, model_output, targets):
         mel_target, gate_target = targets[0], targets[1]
@@ -53,9 +59,9 @@ class Tacotron2Loss(_Loss):
         mel_out = mel_out.float()
         mel_target = mel_target.float()
         mel_out_postnet = mel_out_postnet.float()
-        mel_loss = nn.MSELoss()(mel_out, mel_target) + \
-                   nn.MSELoss()(mel_out_postnet, mel_target)
-        gate_loss = nn.BCEWithLogitsLoss()(gate_out, gate_target)
+        mel_loss = self.mse(mel_out, mel_target) + \
+                   self.mse(mel_out_postnet, mel_target)
+        gate_loss = self.bce(gate_out, gate_target)
         return mel_loss + gate_loss
 
 

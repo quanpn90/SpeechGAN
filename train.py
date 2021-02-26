@@ -6,7 +6,7 @@ import onmt.modules
 import argparse
 import torch
 import time, datetime
-from onmt.train_utils.trainer import XETrainer, SpeechAETrainer, SpeechFNTrainer
+from onmt.train_utils.trainer import  SpeechFNTrainer
 from onmt.data.mmap_indexed_dataset import MMapIndexedDataset
 from onmt.data.scp_dataset import SCPIndexDataset
 from onmt.modules.loss import NMTLossFunc, NMTAndCTCLossFunc, Tacotron2Loss, AttributeLoss
@@ -99,26 +99,16 @@ def main():
                 train_src_langs.append(torch.Tensor([dicts['langs']['src']]))
                 train_tgt_langs.append(torch.Tensor([dicts['langs']['tgt']]))
 
-            if not opt.streaming:
-                train_data = onmt.Dataset(numpy_to_torch(train_dict['src']), numpy_to_torch(train_dict['tgt']),
-                                          train_dict['src_sizes'], train_dict['tgt_sizes'],
-                                          train_src_langs, train_tgt_langs,
-                                          batch_size_words=opt.batch_size_words,
-                                          data_type=dataset.get("type", "text"), sorting=True,
-                                          batch_size_sents=opt.batch_size_sents,
-                                          multiplier=opt.batch_size_multiplier,
-                                          augment=opt.augment_speech,
-                                          upsampling=opt.upsampling,
-                                          num_split=len(opt.gpus))
-            else:
-                train_data = onmt.StreamDataset(train_dict['src'], train_dict['tgt'],
-                                                train_src_langs, train_tgt_langs,
-                                                batch_size_words=opt.batch_size_words,
-                                                data_type=dataset.get("type", "text"), sorting=True,
-                                                batch_size_sents=opt.batch_size_sents,
-                                                multiplier=opt.batch_size_multiplier,
-                                                augment=opt.augment_speech,
-                                                upsampling=opt.upsampling)
+            train_data = onmt.Dataset(numpy_to_torch(train_dict['src']), numpy_to_torch(train_dict['tgt']),
+                                      train_dict['src_sizes'], train_dict['tgt_sizes'],
+                                      train_src_langs, train_tgt_langs,
+                                      batch_size_words=opt.batch_size_words,
+                                      data_type=dataset.get("type", "text"), sorting=True,
+                                      batch_size_sents=opt.batch_size_sents,
+                                      multiplier=opt.batch_size_multiplier,
+                                      augment=opt.augment_speech,
+                                      upsampling=opt.upsampling,
+                                      num_split=len(opt.gpus))
 
             if valid_dict['src_lang'] is not None:
                 assert 'langs' in dicts
@@ -133,21 +123,13 @@ def main():
                 valid_src_langs.append(torch.Tensor([dicts['langs']['src']]))
                 valid_tgt_langs.append(torch.Tensor([dicts['langs']['tgt']]))
 
-            if not opt.streaming:
-                valid_data = onmt.Dataset(numpy_to_torch(valid_dict['src']), numpy_to_torch(valid_dict['tgt']),
-                                          valid_dict['src_sizes'], valid_dict['tgt_sizes'],
-                                          valid_src_langs, valid_tgt_langs,
-                                          batch_size_words=opt.batch_size_words,
-                                          data_type=dataset.get("type", "text"), sorting=True,
-                                          batch_size_sents=opt.batch_size_sents,
-                                          upsampling=opt.upsampling)
-            else:
-                valid_data = onmt.StreamDataset(numpy_to_torch(valid_dict['src']), numpy_to_torch(valid_dict['tgt']),
-                                                valid_src_langs, valid_tgt_langs,
-                                                batch_size_words=opt.batch_size_words,
-                                                data_type=dataset.get("type", "text"), sorting=True,
-                                                batch_size_sents=opt.batch_size_sents,
-                                                upsampling=opt.upsampling)
+            valid_data = onmt.Dataset(numpy_to_torch(valid_dict['src']), numpy_to_torch(valid_dict['tgt']),
+                                      valid_dict['src_sizes'], valid_dict['tgt_sizes'],
+                                      valid_src_langs, valid_tgt_langs,
+                                      batch_size_words=opt.batch_size_words,
+                                      data_type=dataset.get("type", "text"), sorting=True,
+                                      batch_size_sents=opt.batch_size_sents,
+                                      upsampling=opt.upsampling)
 
             print(' * number of training sentences. %d' % len(dataset['train']['src']))
             print(' * maximum batch size (words per batch). %d' % opt.batch_size_words)
@@ -212,26 +194,20 @@ def main():
             else:
                 data_type = 'text'
 
-
-            if not opt.streaming:
-
-                train_data = onmt.Dataset(train_src,
-                                          train_tgt,
-                                          train_src_sizes, train_tgt_sizes,
-                                          train_src_langs, train_tgt_langs,
-                                          batch_size_words=opt.batch_size_words,
-                                          data_type=data_type, sorting=True,
-                                          batch_size_sents=opt.batch_size_sents,
-                                          multiplier=opt.batch_size_multiplier,
-                                          max_length_multiplier=opt.n_frames_per_step,
-                                          augment=opt.augment_speech,
-                                          src_align_right=opt.src_align_right,
-                                          upsampling=opt.upsampling,
-                                          cleaning=True, verbose=True,
-                                          num_split=len(opt.gpus))
-
-
-
+            train_data = onmt.Dataset(train_src,
+                                      train_tgt,
+                                      train_src_sizes, train_tgt_sizes,
+                                      train_src_langs, train_tgt_langs,
+                                      batch_size_words=opt.batch_size_words,
+                                      data_type=data_type, sorting=True,
+                                      batch_size_sents=opt.batch_size_sents,
+                                      multiplier=opt.batch_size_multiplier,
+                                      max_length_multiplier=opt.n_frames_per_step,
+                                      augment=opt.augment_speech,
+                                      src_align_right=opt.src_align_right,
+                                      upsampling=opt.upsampling,
+                                      cleaning=True, verbose=True,
+                                      num_split=len(opt.gpus))
 
             valid_path = opt.data + '.valid'
             if opt.data_format in ['scp', 'scpmem']:
@@ -258,8 +234,6 @@ def main():
                 valid_src_langs.append(torch.Tensor([dicts['langs']['src']]))
                 valid_tgt_langs.append(torch.Tensor([dicts['langs']['tgt']]))
 
-
-
             # check the length files if they exist
             if os.path.exists(valid_path + '.src_sizes.npy'):
                 valid_src_sizes = np.load(valid_path + '.src_sizes.npy')
@@ -272,26 +246,15 @@ def main():
             else:
                 valid_tgt_sizes= None
 
-
-            if not opt.streaming:
-
-                valid_data = onmt.Dataset(valid_src, valid_tgt,
-                                          valid_src_sizes, valid_tgt_sizes,
-                                          valid_src_langs, valid_tgt_langs,
-                                          batch_size_words=opt.batch_size_words,
-                                          data_type=data_type, sorting=True,
-                                          batch_size_sents=opt.batch_size_sents,
-                                          max_length_multiplier=opt.n_frames_per_step,
-                                          src_align_right=opt.src_align_right,
-                                          cleaning=True, verbose=True, debug=True)
-
-            else:
-                # for validation data, we have to go through sentences (very slow but to ensure correctness)
-                valid_data = onmt.StreamDataset(valid_src, valid_tgt,
-                                                valid_src_langs, valid_tgt_langs,
-                                                batch_size_words=opt.batch_size_words,
-                                                data_type=data_type, sorting=True,
-                                                batch_size_sents=opt.batch_size_sents)
+            valid_data = onmt.Dataset(valid_src, valid_tgt,
+                                      valid_src_sizes, valid_tgt_sizes,
+                                      valid_src_langs, valid_tgt_langs,
+                                      batch_size_words=opt.batch_size_words,
+                                      data_type=data_type, sorting=True,
+                                      batch_size_sents=opt.batch_size_sents,
+                                      max_length_multiplier=opt.n_frames_per_step,
+                                      src_align_right=opt.src_align_right,
+                                      cleaning=True, verbose=True, debug=True)
 
             elapse = str(datetime.timedelta(seconds=int(time.time() - start)))
             print("Done after %s" % elapse)
@@ -344,14 +307,24 @@ def main():
                 else:
                     src_data = MMapIndexedDataset(os.path.join(data_dir, "data.src"))
 
-                tgt_data = MMapIndexedDataset(os.path.join(data_dir, "data.tgt"))
+                if os.path.exists(data_dir + '.tgt.bin'):
+                    tgt_data = MMapIndexedDataset(os.path.join(data_dir, "data.tgt"))
+                else:
+                    tgt_data = None
 
                 src_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.src_lang'))
-                tgt_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.tgt_lang'))
+
+                if os.path.exists(data_dir + '.data.tgt_lang'):
+                    tgt_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.tgt_lang'))
+                else:
+                    tgt_lang_data = None
 
                 if os.path.exists(os.path.join(data_dir, 'data.src_sizes.npy')):
                     src_sizes = np.load(os.path.join(data_dir, 'data.src_sizes.npy'))
-                    tgt_sizes = np.load(os.path.join(data_dir, 'data.tgt_sizes.npy'))
+                    if os.path.exists(data_dir + 'data.tgt_sizes.npy'):
+                        tgt_sizes = np.load(os.path.join(data_dir, 'data.tgt_sizes.npy'))
+                    else:
+                        tgt_sizes = None
                 else:
                     src_sizes, sizes = None, None
 
@@ -370,6 +343,7 @@ def main():
                                               data_type=data_type, sorting=True,
                                               batch_size_sents=opt.batch_size_sents,
                                               multiplier=opt.batch_size_multiplier,
+                                              max_length_multiplier=opt.n_frames_per_step,
                                               src_align_right=opt.src_align_right,
                                               augment=opt.augment_speech,
                                               upsampling=opt.upsampling,
@@ -399,14 +373,23 @@ def main():
                 else:
                     src_data = MMapIndexedDataset(os.path.join(data_dir, "data.src"))
 
-                tgt_data = MMapIndexedDataset(os.path.join(data_dir, "data.tgt"))
+                if os.path.exists(data_dir + '.tgt.bin'):
+                    tgt_data = MMapIndexedDataset(os.path.join(data_dir, "data.tgt"))
+                else:
+                    tgt_data = None
 
                 src_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.src_lang'))
-                tgt_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.tgt_lang'))
+                if os.path.exists(data_dir + '.data.tgt_lang'):
+                    tgt_lang_data = MMapIndexedDataset(os.path.join(data_dir, 'data.tgt_lang'))
+                else:
+                    tgt_lang_data = None
 
                 if os.path.exists(os.path.join(data_dir, 'data.src_sizes.npy')):
                     src_sizes = np.load(os.path.join(data_dir, 'data.src_sizes.npy'))
-                    tgt_sizes = np.load(os.path.join(data_dir, 'data.tgt_sizes.npy'))
+                    if os.path.exists(data_dir + 'data.tgt_sizes.npy'):
+                        tgt_sizes = np.load(os.path.join(data_dir, 'data.tgt_sizes.npy'))
+                    else:
+                        tgt_sizes = None
                 else:
                     src_sizes, sizes = None, None
 
@@ -421,9 +404,11 @@ def main():
                                               src_lang_data, tgt_lang_data,
                                               batch_size_words=opt.batch_size_words,
                                               data_type=data_type, sorting=True,
+                                              multiplier=opt.batch_size_multiplier,
+                                              max_length_multiplier=opt.n_frames_per_step,
                                               batch_size_sents=opt.batch_size_sents,
                                               src_align_right=opt.src_align_right,
-                                            cleaning=True, verbose=True, debug=True)
+                                              cleaning=True, verbose=True, debug=True)
 
                     valid_sets.append(valid_data)
 
@@ -484,7 +469,6 @@ def main():
         if not opt.memory_profiling:
             optimize_model(model)
 
-
     else:
         from onmt.model_factory import build_fusion
         from onmt.modules.loss import FusionLoss
@@ -506,20 +490,20 @@ def main():
             from onmt.train_utils.bayes_by_backprop_trainer import BayesianTrainer
             trainer = BayesianTrainer(model, loss_function, train_data, valid_data, dicts, opt)
         elif opt.model == "speech_ae":
-            trainer = SpeechAETrainer(model, loss_function, train_data, valid_data, dicts, opt)
+            raise NotImplementedError
+            # trainer = SpeechAETrainer(model, loss_function, train_data, valid_data, dicts, opt)
             print(" TacotronTrainer successfully")
         elif  opt.model == "speech_FN":
 
             trainer = SpeechFNTrainer(model, lat_dis, loss_function, train_data, valid_data, dicts, opt)
 
         else:
-            trainer = XETrainer(model, loss_function, train_data, valid_data, dicts, opt)
+            raise NotImplementedError
+            # trainer = XETrainer(model, loss_function, train_data, valid_data, dicts, opt)
 
         trainer.run(checkpoint=checkpoint)
     else:
         raise NotImplementedError
-
-
 
 
 if __name__ == "__main__":

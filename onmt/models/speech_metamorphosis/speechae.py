@@ -1,19 +1,119 @@
 import torch
 import torch.nn as nn
+from torch import _VF
 import torch.nn.functional as F
+from torch.nn import Parameter
+from torch import Tensor
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from collections import defaultdict
 from torch.autograd import Variable
 from .tacotron_layers import LinearNorm, Prenet, Attention, get_mask_from_lengths, Postnet
 import math
 import onmt
+from typing import List, Tuple, Optional, overload
+
 from math import sqrt
-from onmt.modules.base_seq2seq import NMTModel, DecoderState
 from onmt.models.transformer_layers import PrePostProcessing
 from onmt.modules.attention import MultiHeadAttention
 from onmt.modules.optimized.encdec_attention import EncdecMultiheadAttn
 from onmt.modules.dropout import embedded_dropout
 from onmt.models.speech_recognizer.relative_transformer_layers import LIDFeedForward_small
+
+
+class LSTMCell(nn.Module):
+
+    def __init__(self, input_size, output_size, bias: bool = True,
+                 factorized=False, rank=1, n_factors=1):
+
+        self.input_size = input_size
+        self.output_size = output_size
+        self.factorized = factorized
+        super().__init__()
+
+        self.cell = nn.LSTMCell(input_size, output_size, bias=bias)
+        self.n_languages = n_factors
+        self.rank = rank
+
+        # this cell has two weights:
+        # self.weight_ih = Parameter(torch.Tensor(num_chunks * hidden_size, input_size))
+        # self.weight_hh = Parameter(torch.Tensor(num_chunks * hidden_size, hidden_size))
+        if factorized:
+            self.ih_s = Parameter(torch.Tensor(self.n_languages, self.rank, output_size * 4))
+            self.ih_r = Parameter(torch.Tensor(self.n_languages, self.rank, input_size))
+
+            nn.init.normal_(self.ih_s, 0.0, math.sqrt(0.02))
+            nn.init.normal_(self.ih_r, 0.0, math.sqrt(0.02))
+
+            self.ih_ms = Parameter(torch.Tensor(self.n_languages, 1, output_size * 4))
+            self.ih_mr = Parameter(torch.Tensor(self.n_languages, 1, input_size))
+
+            nn.init.constant_(self.ih_ms, 1.0)
+            nn.init.constant_(self.ih_mr, 1.0)
+
+            self.hh_s = Parameter(torch.Tensor(self.n_languages, self.rank, output_size * 4))
+            self.hh_r = Parameter(torch.Tensor(self.n_languages, self.rank, output_size))
+
+            nn.init.normal_(self.hh_s, 0.0, math.sqrt(0.02))
+            nn.init.normal_(self.hh_r, 0.0, math.sqrt(0.02))
+
+            self.hh_ms = Parameter(torch.Tensor(self.n_languages, 1, output_size * 4))
+            self.hh_mr = Parameter(torch.Tensor(self.n_languages, 1, output_size))
+
+            nn.init.constant_(self.hh_ms, 1.0)
+            nn.init.constant_(self.hh_mr, 1.0)
+
+    def set_weight(self, idx=None):
+
+        if self.factorized:
+
+            self.weight_ih = self.cell.weight_ih * 1
+            self.weight_hh = self.cell.weight_hh * 1
+            assert idx is not None
+            r = torch.index_select(self.ih_r, 0, idx).squeeze(0)
+            s = torch.index_select(self.ih_s, 0, idx).squeeze(0)
+            rm = torch.index_select(self.ih_mr, 0, idx).squeeze(0)
+            sm = torch.index_select(self.ih_ms, 0, idx).squeeze(0)
+
+            # self.weight_ih = self.weight_ih * torch.sum(torch.bmm(sm.unsqueeze(-1), rm.unsqueeze(1)), dim=0)
+
+            self.weight_ih = self.weight_ih + torch.sum(torch.bmm(s.unsqueeze(-1), r.unsqueeze(1)), dim=0)
+
+            r = torch.index_select(self.hh_r, 0, idx).squeeze(0)
+            s = torch.index_select(self.hh_s, 0, idx).squeeze(0)
+            rm = torch.index_select(self.hh_mr, 0, idx).squeeze(0)
+            sm = torch.index_select(self.hh_ms, 0, idx).squeeze(0)
+
+            # self.weight_hh = self.weight_hh * torch.sum(torch.bmm(sm.unsqueeze(-1), rm.unsqueeze(1)), dim=0)
+
+            self.weight_hh = self.weight_hh + torch.sum(torch.bmm(s.unsqueeze(-1), r.unsqueeze(1)), dim=0)
+
+        else:
+            self.weight_ih = self.cell.weight_ih * 1
+            self.weight_hh = self.cell.weight_hh * 1
+
+    def forward(self, input: Tensor, hx: Optional[Tuple[Tensor, Tensor]] = None, idx=None) -> Tuple[Tensor, Tensor]:
+        """
+        :param input:
+        :param hx:
+        :param idx:
+        :return:
+        """
+
+        if self.factorized:
+            self.cell.check_forward_input(input)
+            if hx is None:
+                zeros = torch.zeros(input.size(0), self.hidden_size, dtype=input.dtype, device=input.device)
+                hx = (zeros, zeros)
+            self.cell.check_forward_hidden(input, hx[0], '[0]')
+            self.cell.check_forward_hidden(input, hx[1], '[1]')
+
+            return _VF.lstm_cell(
+                input, hx,
+                self.weight_ih, self.weight_hh,
+                self.cell.bias_ih, self.cell.bias_hh,
+            )
+        else:
+            return self.cell(input, hx)
 
 
 class LatentDiscrinator(nn.Module):
@@ -200,30 +300,41 @@ class TacotronDecoder(nn.Module):
         self.use_accent_embedding = opt.use_language_embedding
         self.encoder_type = opt.encoder_type
 
+        factorized = opt.multilingual_factorized_weights
+        rank = opt.mfw_rank
+        n_factors = opt.n_languages
+
+        self.factorized = factorized
+
         self.prenet = Prenet(
             opt.n_mel_channels * opt.n_frames_per_step,
-            [opt.prenet_dim, opt.prenet_dim])
+            [opt.prenet_dim, opt.prenet_dim],
+            factorized=factorized, rank=rank, n_factors=n_factors)
 
-        self.attention_rnn = nn.LSTMCell(
-            opt.prenet_dim + opt.model_size,
-            opt.model_size)
+        self.attention_rnn = LSTMCell(opt.prenet_dim + opt.model_size, opt.model_size,
+                                      factorized=factorized, rank=rank, n_factors=n_factors)
 
         self.attention_layer = Attention(
             opt.model_size, opt.model_size,
             opt.attention_dim, opt.attention_location_n_filters,
-            opt.attention_location_kernel_size)
+            opt.attention_location_kernel_size,
+            factorized=factorized, rank=rank, n_factors=n_factors)
 
-        self.decoder_rnn = nn.LSTMCell(
-            opt.model_size + opt.model_size,
-            opt.model_size, 1)
+        self.decoder_rnn = LSTMCell(opt.model_size + opt.model_size, opt.model_size,
+                                    factorized=factorized, rank=rank, n_factors=n_factors)
+            # nn.LSTMCell(
+            # opt.model_size + opt.model_size,
+            # opt.model_size, 1)
 
         self.linear_projection = LinearNorm(
             opt.model_size + opt.model_size,
-            opt.n_mel_channels * opt.n_frames_per_step)
+            opt.n_mel_channels * opt.n_frames_per_step,
+            factorized=factorized, rank=rank, n_factors=n_factors)
 
         self.gate_layer = LinearNorm(
             opt.model_size + opt.model_size, 1,
-            bias=True, w_init_gain='sigmoid')
+            bias=True, w_init_gain='sigmoid',
+            factorized=factorized, rank=rank, n_factors=n_factors)
 
     def get_go_frame(self, memory):
         """ Gets all zeros frames to use as first decoder input
@@ -239,7 +350,7 @@ class TacotronDecoder(nn.Module):
             B, self.n_mel_channels * self.n_frames_per_step).zero_())
         return decoder_input
 
-    def initialize_decoder_states(self, memory, mask):
+    def initialize_decoder_states(self, memory, mask, tgt_lang=None):
         """ Initializes attention rnn states, decoder rnn states, attention
         weights, attention cumulative weights, attention context, stores memory
         and stores processed memory
@@ -269,7 +380,7 @@ class TacotronDecoder(nn.Module):
             B, self.encoder_embedding_dim).zero_())
 
         self.memory = memory
-        self.processed_memory = self.attention_layer.memory_layer(memory)
+        self.processed_memory = self.attention_layer.memory_layer(memory, idx=tgt_lang)
         self.mask = mask
 
     def parse_decoder_inputs(self, decoder_inputs):
@@ -290,7 +401,7 @@ class TacotronDecoder(nn.Module):
         decoder_inputs = decoder_inputs.transpose(0, 1)
         return decoder_inputs
 
-    def parse_decoder_outputs(self, mel_outputs, gate_outputs, alignments):
+    def parse_decoder_outputs(self, mel_outputs, gate_outputs, alignments, attention_contexts):
         """ Prepares decoder outputs for output
         PARAMS
         ------
@@ -316,9 +427,13 @@ class TacotronDecoder(nn.Module):
         # (B, T_out, n_mel_channels) -> (B, n_mel_channels, T_out)
         mel_outputs = mel_outputs.transpose(1, 2)
 
-        return mel_outputs, gate_outputs, alignments
+        attention_contexts = torch.stack(attention_contexts)
 
-    def decode(self, decoder_input):
+        # print(attention_contexts.size())
+
+        return mel_outputs, gate_outputs, alignments, attention_contexts
+
+    def decode(self, decoder_input, tgt_lang=None):
         """ Decoder step using stored states, attention and memory
         PARAMS
         ------
@@ -333,7 +448,7 @@ class TacotronDecoder(nn.Module):
         cell_input = torch.cat((decoder_input, self.attention_context), -1)
         #  B, prenet_dim + model_dim
         self.attention_hidden, self.attention_cell = self.attention_rnn(
-            cell_input, (self.attention_hidden, self.attention_cell))
+            cell_input, (self.attention_hidden, self.attention_cell), tgt_lang)
         #  B,  model_dim
         self.attention_hidden = F.dropout(
             self.attention_hidden, self.p_attention_dropout, self.training)
@@ -342,33 +457,35 @@ class TacotronDecoder(nn.Module):
             (self.attention_weights.unsqueeze(1),
              self.attention_weights_cum.unsqueeze(1)), dim=1)
         #  B, 2 ,  Max_time
+        # attention_hidden should be query
         self.attention_context, self.attention_weights = self.attention_layer(
             self.attention_hidden, self.memory, self.processed_memory,
-            attention_weights_cat, self.mask)
+            attention_weights_cat, self.mask, tgt_lang)
 
         self.attention_weights_cum += self.attention_weights
         decoder_input = torch.cat(
             (self.attention_hidden, self.attention_context), -1)
         # B, 2* model_dim
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-            decoder_input, (self.decoder_hidden, self.decoder_cell))
+            decoder_input, (self.decoder_hidden, self.decoder_cell), tgt_lang)
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training)
 
         decoder_hidden_attention_context = torch.cat(
             (self.decoder_hidden, self.attention_context), dim=1)
         decoder_output = self.linear_projection(
-            decoder_hidden_attention_context)
+            decoder_hidden_attention_context, tgt_lang)
         # B, nmel * nframeperstep
-        gate_prediction = self.gate_layer(decoder_hidden_attention_context)
-        return decoder_output, gate_prediction, self.attention_weights
+        gate_prediction = self.gate_layer(decoder_hidden_attention_context, tgt_lang)
 
-    def forward(self, src_mask, encoder_out, decoder_inputs, src_lang=None, **kwargs):
+        return decoder_output, gate_prediction, self.attention_weights, self.attention_context
+
+    def forward(self, src_mask, encoder_out, decoder_inputs, tgt_lang=None, **kwargs):
         """ Decoder forward pass for training
         PARAMS
         ------
         memory: Encoder outputs
-        decoder_inputs: Decoder inputs for teacher forcing. i.e. mel-specs
+        decoder_inputs: Decoder inputs for teacher forcing. i.e. mel-specs [B x H x T]
         memory_lengths: Encoder output lengths for attention masking.
         RETURNS
         -------
@@ -377,35 +494,45 @@ class TacotronDecoder(nn.Module):
         alignments: sequence of attention weights from the decoder
         """
         if self.use_accent_embedding:
-            accent_emb = self.accent_embedding(src_lang)
+            accent_emb = self.accent_embedding(tgt_lang)
             encoder_out = encoder_out + accent_emb.unsqueeze(1)
 
+        if self.factorized:
+            self.attention_rnn.set_weight(tgt_lang)
+            self.decoder_rnn.set_weight(tgt_lang)
+
+        # get the first frame (zero) BOS
         decoder_input = self.get_go_frame(encoder_out).unsqueeze(0)
+
+        # reshape the input from [B x H x T] to [T x B x H]
         decoder_inputs = self.parse_decoder_inputs(decoder_inputs)
         decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)
         # (T_out + 1, B, n_mel_channels)
-        decoder_inputs = self.prenet(decoder_inputs)
+        # prenet is basically Feedforward layers with Relu and dropout
+        decoder_inputs = self.prenet(decoder_inputs, tgt_lang)
         # (T_out + 1, B, prenet_dim)
 
         lengths = src_mask.sum(-1).int()
 
         self.initialize_decoder_states(
-            encoder_out, mask=~get_mask_from_lengths(lengths))
+            encoder_out, mask=~get_mask_from_lengths(lengths), tgt_lang=tgt_lang)
 
         mel_outputs, gate_outputs, alignments = [], [], []
+        attention_contexts = []
         while len(mel_outputs) < decoder_inputs.size(0) - 1:
             decoder_input = decoder_inputs[len(mel_outputs)]
             # B, prenet_dim
-            mel_output, gate_output, attention_weights = self.decode(
-                decoder_input)
+            mel_output, gate_output, attention_weights, attention_context = self.decode(
+                decoder_input, tgt_lang)
             mel_outputs += [mel_output.squeeze(1)]
             gate_outputs += [gate_output.squeeze(1)]
             alignments += [attention_weights]
+            attention_contexts += [attention_context]
 
-        mel_outputs, gate_outputs, alignments = self.parse_decoder_outputs(
-            mel_outputs, gate_outputs, alignments)
+        mel_outputs, gate_outputs, alignments, attention_contexts = self.parse_decoder_outputs(
+            mel_outputs, gate_outputs, alignments, attention_contexts)
 
-        return mel_outputs, gate_outputs, alignments
+        return mel_outputs, gate_outputs, alignments, attention_contexts
 
     def inference(self, encoder_out):
         """ Decoder inference
@@ -458,6 +585,11 @@ class SpeechAE(nn.Module):
         self.postnet = Postnet(opt)
 
     def parse_output(self, outputs, output_lengths=None):
+        """
+        :param outputs:
+        :param output_lengths:
+        :return:
+        """
         if self.mask_padding and output_lengths is not None:
             mask = ~get_mask_from_lengths(output_lengths, self.n_frames_per_step)
 
@@ -507,8 +639,8 @@ class SpeechAE(nn.Module):
         # encoder_outputs = self.encoder(embedded_inputs, text_lengths)
         decoder_input = src_org.narrow(2, 1, src_org.size(2) - 1)
         decoder_input = decoder_input.permute(1, 2, 0)
-        mel_outputs, gate_outputs, alignments = self.tacotron_decoder(
-            src_mask, context, decoder_input, src_lang=src_lang)
+        mel_outputs, gate_outputs, alignments, attention_context = self.tacotron_decoder(
+            src_mask, context, decoder_input, tgt_lang=src_lang)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet

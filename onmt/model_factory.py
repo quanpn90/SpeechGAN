@@ -191,7 +191,6 @@ def build_tm_model(opt, dicts):
 
         print("Create speech fader network successfully")
 
-
     elif opt.model in ['transformer', 'stochastic_transformer']:
         onmt.constants.init_value = opt.param_init
 
@@ -238,23 +237,6 @@ def build_tm_model(opt, dicts):
             rev_generator = None
 
         model = RelativeTransformer(encoder, decoder, generator, rev_decoder, rev_generator, mirror=opt.mirror_loss)
-
-    elif opt.model == 'distance_transformer':
-
-        # from onmt.models.relative_transformer import RelativeTransformerDecoder, RelativeTransformer
-        from onmt.models.distance_transformer import DistanceTransformerEncoder
-
-        if opt.encoder_type == "text":
-            encoder = DistanceTransformerEncoder(opt, embedding_src, None,
-                                                 opt.encoder_type, language_embeddings=language_embeddings)
-        if opt.encoder_type == "audio":
-            # raise NotImplementedError
-            encoder = DistanceTransformerEncoder(opt, None, None, encoder_type=opt.encoder_type,
-                                                 language_embeddings=language_embeddings)
-
-        generator = nn.ModuleList(generators)
-        decoder = DistanceTransformerDecoder(opt, embedding_tgt, None, language_embeddings=language_embeddings)
-        model = Transformer(encoder, decoder, generator, mirror=opt.mirror_loss)
 
     elif opt.model == 'universal_transformer':
         from onmt.models.universal_transformer import UniversalTransformerDecoder, UniversalTransformerEncoder
